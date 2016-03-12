@@ -104,10 +104,10 @@ public class VendingServer
         public String getStockListString()
         {
             StringBuffer str = new StringBuffer();
-            str.append("ITEM LIST\n");
+            str.append("ITEM LIST\r\n");
             for( Stock s : stocks)
             {
-                str.append(s.toString() + "\n");
+                str.append(s.toString() + "\r\n");
             }
 
             return str.toString();
@@ -136,19 +136,45 @@ public class VendingServer
             {
                 try
                 {
-                    outToClient.writeBytes("Choose a message type (GET ITEM (L)IST, (G)ET ITEM, (Q)UIT): " + '\n');
-                    outToClient.flush();
-
                     String clientRcvdMsg = inFromClient.readLine();
 
-                    if( clientRcvdMsg.equals("L"))
+                    if( clientRcvdMsg.equals("GET ITEM"))
                     {
-                        outToClient.writeBytes( getStockListString() + "\n");
-                        outToClient.flush();
+                        //read the id and amount
+                        clientRcvdMsg = inFromClient.readLine();
+
+                        String tmp = (clientRcvdMsg.split(" "))[0];
+                        int id = Integer.parseInt(tmp);
+
+                        tmp = (clientRcvdMsg.split(" "))[1];
+                        int amount = Integer.parseInt(tmp);
+
+                        //SEARCH THE REQUESTED ITEM
+                        boolean outOfStock = true;
+                        for( Stock s : stocks)
+                        {
+                            if( s.getProductId() == id && s.getAmount() >= amount)
+                            {
+                                s.setAmount(s.getAmount() - amount);
+                                outToClient.writeBytes("SUCCESS\r\n\r\n");
+                                outToClient.flush();
+                                outOfStock = false;
+                                break;
+                            }
+                        }
+                        // IF ITEM NOT FOUND
+                        if ( outOfStock ) {
+                            outToClient.writeBytes("OUT OF STOCK\r\n\r\n");
+                            outToClient.flush();
+                        }
+
+                        //pass the empty line
+                        inFromClient.readLine();
                     }
-                    else
+                    else if ( clientRcvdMsg.equals("GET ITEM LIST"))
                     {
-                        outToClient.writeBytes("Invalid command \n");
+                        inFromClient.readLine(); //pass the empty line
+                        outToClient.writeBytes( getStockListString() + "\r\n"); //dont forget to append the last empty line
                         outToClient.flush();
                     }
                     //server.close();
