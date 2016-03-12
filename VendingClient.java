@@ -22,33 +22,38 @@ public class VendingClient {
         }
     }
 
-    public void run()
-    {
+    public void run() throws IOException {
+        String sentence;
+        String response;
+
+        BufferedReader inFromUser =
+                new BufferedReader(new InputStreamReader(System.in));
+
+
+        DataOutputStream outToServer =
+                new DataOutputStream(clientSocket.getOutputStream());
+
+        BufferedReader inFromServer =
+                new BufferedReader(new
+                        InputStreamReader(clientSocket.getInputStream()));
+
+        System.out.println("I connected to server " + clientSocket.getRemoteSocketAddress() );
+
         while (true)
         {
             try {
-                String sentence;
-                String response;
-
-                BufferedReader inFromUser =
-                        new BufferedReader(new InputStreamReader(System.in));
-
-
-                DataOutputStream outToServer =
-                        new DataOutputStream(clientSocket.getOutputStream());
-
-                BufferedReader inFromServer =
-                        new BufferedReader(new
-                                InputStreamReader(clientSocket.getInputStream()));
-
-                sentence = inFromUser.readLine();
-                outToServer.writeBytes(sentence + '\n');
-                outToServer.flush();
 
                 response = inFromServer.readLine();
-                System.out.println("Response:\n" + response);
+                System.out.println(response);
 
+                sentence = inFromUser.readLine();
+                outToServer.writeBytes(sentence + "\r\n");
+                outToServer.flush();
                 //clientSocket.close();
+
+                response = inFromServer.readLine();
+                System.out.println(response);
+
 
             }
             catch ( IOException ie)

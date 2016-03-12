@@ -1,10 +1,13 @@
-import java.io.IOException;
+import java.io.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Created by burak on 06.03.2016.
  */
 public class Driver {
-    public static void main(String[] args) {
+
+    public static void main(String[] args) throws IOException {
 
         // if IP is given it's a client
         if(args.length == 2)
