@@ -2,6 +2,8 @@
  * Created by burak on 06.03.2016.
  */
 
+import sun.rmi.runtime.Log;
+
 import java.net.*;
 import java.io.*;
 import java.util.ArrayList;
@@ -13,13 +15,14 @@ public class VendingServer
 {
     private ServerSocket welcomeSocket;
     private ArrayList<Stock> stocks;
-
+    private ArrayList<VendingServerThread> threads;
 
     public VendingServer (int port) throws IOException
     {
         initStocks("item_list.txt");
 
         welcomeSocket = new ServerSocket(port);
+        threads = new ArrayList<VendingServerThread>();
         //welcomeSocket.setSoTimeout(100000);
     }
 
@@ -32,7 +35,7 @@ public class VendingServer
         BufferedReader br = new BufferedReader(new InputStreamReader(fstream));
 
         String strLine;
-        String pattern = "(\\d+) ([^ \\t\\n\\r]+) (\\d+)";
+        String pattern = "(\\d+)[ \\t\\n\\r]+([^ \\t\\n\\r]+)[ \\t\\n\\r]+(\\d+)";
 
         // Create a Pattern object
         Pattern r = Pattern.compile(pattern, Pattern.MULTILINE);
@@ -68,59 +71,70 @@ public class VendingServer
     }
 
     public void start() throws IOException {
+        VendingServerThread firstThread = new VendingServerThread(welcomeSocket, stocks, threads);
+        firstThread.start();
 
-        while(true)
+        for( VendingServerThread t : threads)
         {
-            //System.out.println("Waiting for client on port " + welcomeSocket.getLocalPort() + "...");
-            System.out.print("Waiting for a client... ");
-
-            Socket cliSocket = null;
-
-
-            cliSocket = welcomeSocket.accept();
-            //System.out.println("Just connected to " + cliSocket.getRemoteSocketAddress());
-            System.out.println("A client is connected.");
-
-            VendingServerThread cli = new VendingServerThread(cliSocket, stocks);
-            cli.start();
-
             try {
-                cli.join();
+                t.join();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-
         }
+
+        System.out.println("All threads are finished. Server closes.");
 
 
     }
 
     public class VendingServerThread extends Thread
     {
+        private ServerSocket welcomeSocket;
         private Socket cliSpecificSocket;
         private List<Stock> stocks;
+        private ArrayList<VendingServerThread> threads;
 
-
-        public VendingServerThread(Socket cliSpecificSocket, List<Stock> stocks)
+        public VendingServerThread(ServerSocket welcomeSocket,
+                                   List<Stock> stocks,
+                                   ArrayList<VendingServerThread> threads)
         {
-            this.cliSpecificSocket = cliSpecificSocket;
+            this.welcomeSocket = welcomeSocket;
             this.stocks = stocks;
-        }
-
-        public String getStockListString()
-        {
-            StringBuffer str = new StringBuffer();
-            str.append("ITEM LIST\r\n");
-            for( Stock s : stocks)
-            {
-                str.append(s.toString() + "\r\n");
-            }
-
-            return str.toString();
+            this.threads = threads;
         }
 
         public void run()
         {
+            //client search
+            //System.out.println("Waiting    for client on port " + welcomeSocket.getLocalPort() + "...");
+
+
+
+            System.out.print("Listening for a client on  " + this.toString() +
+                                "\n**********************\n");
+
+            this.cliSpecificSocket = null;
+
+            try {
+                cliSpecificSocket = welcomeSocket.accept();
+                if( areAllItemsOutOfStock() ) //finish this thread
+                {
+                    System.out.println("All items finished. Killing thread " + this);
+                    return;
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            //System.out.println("Just connected to " + cliSocket.getRemoteSocketAddress());
+            System.out.print("A client is connected on  " + this.toString() + "\n");
+
+            VendingServerThread cli = new VendingServerThread(welcomeSocket, stocks, threads);
+            cli.start();
+            threads.add(this); //add the thread itself to client threads list
+
+
             BufferedReader inFromClient = null;
             DataOutputStream outToClient = null;
 
@@ -146,7 +160,7 @@ public class VendingServer
 
                     if( clientRcvdMsg.equals("GET ITEM"))
                     {
-                        System.out.println("The received message:");
+                        System.out.println("Message received on " + this + ":");
                         System.out.println('\t' + clientRcvdMsg);
 
                         //read the id and amount
@@ -168,7 +182,7 @@ public class VendingServer
                                 s.setAmount(s.getAmount() - amount);
                                 outToClient.writeBytes("SUCCESS\r\n\r\n");
                                 outToClient.flush();
-                                System.out.println("Send the message:\n\tSUCCESS");
+                                System.out.println("Send the message:\n\tSUCCESS\n********************\n");
                                 outOfStock = false;
                                 break;
                             }
@@ -177,7 +191,7 @@ public class VendingServer
                         if ( outOfStock ) {
                             outToClient.writeBytes("OUT OF STOCK\r\n\r\n");
                             outToClient.flush();
-                            System.out.println("Send the message:\n\tOUT OF STOCK");
+                            System.out.println("Send the message:\n\tOUT OF STOCK\n****************\n");
                         }
 
                         //pass the empty line
@@ -185,10 +199,11 @@ public class VendingServer
                     }
                     else if ( clientRcvdMsg.equals("GET ITEM LIST"))
                     {
+                        System.out.println("Message received on " + this + ": \n\t" + clientRcvdMsg + "\n");
                         inFromClient.readLine(); //pass the empty line
                         outToClient.writeBytes(getStockListString() + "\r\n"); //dont forget to append the last empty line
                         outToClient.flush();
-                        System.out.println("Send the message:\n" + getStockListString());
+                        System.out.println("Send the message:\n" + getStockListString() + "\n******************\n");
                     }
                     //server.close();
 
@@ -206,13 +221,33 @@ public class VendingServer
                 }
             }
 
-            System.out.println("The client has terminated the connection.\nThe current list of items:");
+            System.out.println(this + ": The client has terminated the connection.\nThe current list of items:");
             for(Stock s : stocks)
             {
                 System.out.println(s.toString());
             }
             System.out.println();
 
+        }
+
+        public String getStockListString()
+        {
+            StringBuffer str = new StringBuffer();
+            str.append("ITEM LIST\r\n");
+            for( Stock s : stocks)
+            {
+                str.append(s.toString() + "\r\n");
+            }
+
+            return str.toString();
+        }
+
+        public boolean areAllItemsOutOfStock()
+        {
+            for(Stock s : stocks)
+                if(s.getAmount() > 0)
+                   return false;
+            return true;
         }
     }
 }

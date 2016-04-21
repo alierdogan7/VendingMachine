@@ -34,11 +34,11 @@ public class Stock {
         this.productName = productName;
     }
 
-    public int getAmount() {
+    public synchronized int getAmount() {
         return amount;
     }
 
-    public void setAmount(int amount) {
+    public synchronized void setAmount(int amount) {
         this.amount = amount;
     }
 }
